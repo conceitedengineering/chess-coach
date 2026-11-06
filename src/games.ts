@@ -4,6 +4,35 @@ import { Chess } from "chess.js";
 export type Platform = "lichess" | "chesscom";
 export type Color = "w" | "b";
 
+export type EndReason =
+  | "checkmate" | "resignation" | "time" | "abandoned"
+  | "agreement" | "repetition" | "stalemate" | "insufficient" | "fiftyMove" | "other";
+
+export const END_REASON_LABEL: Record<EndReason, string> = {
+  checkmate: "Checkmate",
+  resignation: "Resignation",
+  time: "On time",
+  abandoned: "Abandoned",
+  agreement: "Agreement",
+  repetition: "Repetition",
+  stalemate: "Stalemate",
+  insufficient: "Insufficient material",
+  fiftyMove: "50-move rule",
+  other: "Other",
+};
+
+const LICHESS_END: Record<string, EndReason> = {
+  mate: "checkmate", resign: "resignation", outoftime: "time", timeout: "abandoned",
+  draw: "agreement", stalemate: "stalemate",
+};
+
+// Chess.com reports the losing side's result for decisive games, and either side's for draws.
+const CHESSCOM_END: Record<string, EndReason> = {
+  checkmated: "checkmate", resigned: "resignation", timeout: "time", abandoned: "abandoned",
+  agreed: "agreement", repetition: "repetition", stalemate: "stalemate", insufficient: "insufficient",
+  timevsinsufficient: "insufficient", "50move": "fiftyMove",
+};
+
 export interface GameRecord {
   id: string;
   platform: Platform;
@@ -13,6 +42,7 @@ export interface GameRecord {
   userColor: Color;
   result: "win" | "loss" | "draw";
   resultDetail: string;
+  endReason: EndReason;
   timeClass: string;
   endTime: number; // ms since epoch
   startFen?: string;
@@ -74,6 +104,7 @@ async function fetchLichess(username: string, start: number, end: number): Promi
       userColor,
       result,
       resultDetail: g.status,
+      endReason: LICHESS_END[g.status] ?? "other",
       timeClass: g.speed,
       endTime: g.lastMoveAt ?? g.createdAt,
       startFen: g.initialFen,
@@ -117,6 +148,7 @@ async function fetchChessCom(username: string, start: number, end: number): Prom
         userColor,
         result,
         resultDetail: result === "win" ? opp.result : me.result,
+        endReason: CHESSCOM_END[result === "win" ? opp.result : me.result] ?? "other",
         timeClass: g.time_class,
         endTime,
         startFen: parsed.startFen,

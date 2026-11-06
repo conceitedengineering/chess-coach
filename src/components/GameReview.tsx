@@ -62,7 +62,7 @@ export function GameReview({
           <span className="truncate">
             {sideName(g.userColor)} vs {opp.name}
           </span>
-          <ResultBadge result={g.result} />
+          <ResultBadge result={g.result} reason={g.endReason} />
         </h2>
         <Button variant="outline" size="sm" asChild>
           <a href={g.url} target="_blank" rel="noopener noreferrer">

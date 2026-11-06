@@ -18,6 +18,8 @@ interface Props {
   orientation: Color;
   lastMove?: string | null; // uci
   arrows?: BoardArrow[];
+  /** Extra CSS classes per square, e.g. { e4: "wrong" } (styled in board.css). */
+  squareClasses?: Record<string, string>;
   /** When set, the side to move can play and this is called with the UCI move. */
   onMove?: (uci: string) => void;
 }
@@ -32,7 +34,9 @@ function legalDests(chess: Chess) {
   return dests;
 }
 
-export function ChessBoard({ fen, orientation, lastMove, arrows = [], onMove }: Props) {
+const NO_CLASSES: Record<string, string> = {};
+
+export function ChessBoard({ fen, orientation, lastMove, arrows = [], squareClasses = NO_CLASSES, onMove }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const api = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
@@ -86,8 +90,9 @@ export function ChessBoard({ fen, orientation, lastMove, arrows = [], onMove }: 
           }
         : { color: undefined, dests: new Map() },
       drawable: { autoShapes: shapes },
+      highlight: { lastMove: true, check: true, custom: new Map(Object.entries(squareClasses) as [Key, string][]) },
     });
-  }, [fen, orientation, lastMove, arrows, onMove]);
+  }, [fen, orientation, lastMove, arrows, squareClasses, onMove]);
 
   return (
     // Inline size: chessground's unlayered .cg-wrap CSS would override Tailwind utilities.

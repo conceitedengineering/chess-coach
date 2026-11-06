@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { keyMoments, type GameAnalysis, type MoveInfo, type Phase } from "@/analysis";
-import { opponent, pct, plural, ResultBadge, sideName } from "@/lib/chess-ui";
+import { END_REASON_ICON, opponent, pct, plural, ResultBadge, sideName } from "@/lib/chess-ui";
+import { END_REASON_LABEL, type EndReason, type GameRecord } from "@/games";
 import { cn } from "@/lib/utils";
 import type { Slot } from "@/useCoach";
 
@@ -74,7 +75,9 @@ export function Summary({
       </div>
 
       {analyses.length > 0 && (
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <EndingsCard games={games} />
+
           <Card>
             <CardHeader>
               <CardTitle>Where your errors happened</CardTitle>
@@ -154,6 +157,44 @@ export function Summary({
   );
 }
 
+function EndingsCard({ games }: { games: GameRecord[] }) {
+  const rows = (["win", "loss", "draw"] as const)
+    .map((result) => {
+      const counts = new Map<EndReason, number>();
+      for (const g of games) if (g.result === result) counts.set(g.endReason, (counts.get(g.endReason) ?? 0) + 1);
+      return { result, entries: [...counts.entries()].sort((a, b) => b[1] - a[1]) };
+    })
+    .filter((r) => r.entries.length);
+  const label = { win: "Won", loss: "Lost", draw: "Drawn" } as const;
+  const tint = { win: "text-win", loss: "text-loss", draw: "text-muted-foreground" } as const;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>How games ended</CardTitle>
+        <CardDescription>Checkmate, clock, or resignation</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {rows.map(({ result, entries }) => (
+          <div key={result} className="flex flex-col gap-1.5">
+            <span className={cn("text-xs font-semibold", tint[result])}>{label[result]}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {entries.map(([reason, n]) => {
+                const Icon = END_REASON_ICON[reason];
+                return (
+                  <Badge key={reason} variant="secondary">
+                    <Icon /> {END_REASON_LABEL[reason]} <span className="text-muted-foreground">×{n}</span>
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function GameCard({ slot, onClick }: { slot: Slot; onClick: () => void }) {
   const g = slot.game;
   const a = slot.analysis;
@@ -169,7 +210,7 @@ function GameCard({ slot, onClick }: { slot: Slot; onClick: () => void }) {
       <Card className="group-hover:ring-foreground/25 group-focus-visible:ring-ring h-full transition-shadow group-focus-visible:ring-2">
         <CardContent className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <ResultBadge result={g.result} />
+            <ResultBadge result={g.result} reason={g.endReason} />
             <span className="truncate font-medium">
               vs {opp.name}
               {opp.rating && <span className="text-muted-foreground font-normal"> ({opp.rating})</span>}

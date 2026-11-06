@@ -1,7 +1,10 @@
+import {
+  CircleHelp, CircleSlash, Crown, Flag, Handshake, Hash, Repeat, Scale, Timer, UserX, type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { MoveInfo } from "@/analysis";
-import type { Color, GameRecord, Platform } from "@/games";
+import { END_REASON_LABEL, type Color, type EndReason, type GameRecord, type Platform } from "@/games";
 
 export const pct = (n: number) => `${Math.round(n)}%`;
 export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : w.endsWith("s") ? "es" : "s"}`;
@@ -47,14 +50,35 @@ export function MoveBadge({ m, className }: { m: MoveInfo; className?: string })
   return <Badge className={cn(SEVERITY_TINT[severity(m)], "font-semibold", className)}>{label}</Badge>;
 }
 
-export function ResultBadge({ result }: { result: GameRecord["result"] }) {
-  const map = {
-    win: ["Won", "bg-win/15 text-win"],
-    loss: ["Lost", "bg-loss/15 text-loss"],
-    draw: ["Draw", "bg-muted text-muted-foreground"],
-  } as const;
-  const [label, cls] = map[result];
-  return <Badge className={cn(cls, "font-semibold")}>{label}</Badge>;
+export const END_REASON_ICON: Record<EndReason, LucideIcon> = {
+  checkmate: Crown,
+  resignation: Flag,
+  time: Timer,
+  abandoned: UserX,
+  agreement: Handshake,
+  repetition: Repeat,
+  stalemate: CircleSlash,
+  insufficient: Scale,
+  fiftyMove: Hash,
+  other: CircleHelp,
+};
+
+const RESULT_STYLE = {
+  win: ["Won", "bg-win/15 text-win"],
+  loss: ["Lost", "bg-loss/15 text-loss"],
+  draw: ["Draw", "bg-muted text-muted-foreground"],
+} as const;
+
+export function ResultBadge({ result, reason }: { result: GameRecord["result"]; reason?: EndReason }) {
+  const [label, cls] = RESULT_STYLE[result];
+  const Icon = reason ? END_REASON_ICON[reason] : null;
+  return (
+    <Badge className={cn(cls, "font-semibold")}>
+      {Icon && <Icon />}
+      {label}
+      {reason && <span className="font-normal opacity-80">· {END_REASON_LABEL[reason]}</span>}
+    </Badge>
+  );
 }
 
 export function SanText({ children, className }: { children: React.ReactNode; className?: string }) {

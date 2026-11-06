@@ -19,11 +19,16 @@ cg-board square.check {
   background: radial-gradient(ellipse at center, oklch(0.63 0.24 27) 0%, oklch(0.63 0.24 27 / 0) 85%);
 }
 .cg-wrap coords { font-family: var(--font-sans); font-weight: 600; font-size: 10px; }
-.orientation-white .ranks :nth-child(odd),
-.orientation-white .files :nth-child(even),
-.orientation-black .ranks :nth-child(even),
-.orientation-black .files :nth-child(odd) { color: var(--sq-light); }
-.orientation-white .ranks :nth-child(even),
-.orientation-white .files :nth-child(odd),
-.orientation-black .ranks :nth-child(odd),
-.orientation-black .files :nth-child(even) { color: var(--sq-dark); }
+/* Label colors contrast with the square each label sits on.
+   White at bottom: a1 is dark, so odd files/ranks sit on dark squares. Black at bottom flips that. */
+.orientation-white coords coord:nth-child(odd),
+.orientation-black coords coord:nth-child(even) { color: var(--sq-light); }
+.orientation-white coords coord:nth-child(even),
+.orientation-black coords coord:nth-child(odd) { color: var(--sq-dark); }
+.cg-wrap coords { opacity: 1; }
+.cg-wrap coords.files { left: 0; bottom: 1px; text-align: right; }
+.cg-wrap coords.files coord { padding-right: 4px; }
+
+/* Drill feedback on squares */
+cg-board square.wrong { background-color: oklch(0.6 0.21 25 / 0.5); }
+cg-board square.right { background-color: oklch(0.6 0.15 155 / 0.5); }
