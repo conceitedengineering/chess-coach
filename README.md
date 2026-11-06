@@ -22,6 +22,9 @@ npm run dev   # http://localhost:5173
 - **UI**: React + Tailwind v4 + shadcn/ui (dark by default, light/system via the header toggle). `src/App.tsx` routes between
   `Summary`, `GameReview` and `Drill` in `src/components/`. The board is Lichess's chessground (`ChessBoard.tsx`, themed in `src/board.css`).
 
-Results are cached in localStorage per game and depth, so re-opening a day is instant.
+Results are cached in localStorage per game and depth, so re-opening a day is instant. Every mistake also goes into a
+local **mistake bank** that brings positions back for review after 1, 3, 7, 21 and 60 days.
+
+Planned features live in [ROADMAP.md](ROADMAP.md).
 
 Stockfish is GPLv3. If you distribute this app with the engine, publish your source too.

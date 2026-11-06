@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChessBoard, type BoardArrow } from "@/components/ChessBoard";
-import { EvalChart } from "@/components/EvalChart";
+import { EvalChart, formatSeconds, TimeStrip } from "@/components/EvalChart";
 import { LinePanel, lineBoard, makeLine, useLineViewer, type Line } from "@/components/LinePlayer";
 import { formatEval, keyMoments, THRESHOLDS, winPct, type GameAnalysis, type MoveInfo } from "@/analysis";
 import {
@@ -115,7 +115,15 @@ export function GameReview({
               <CardDescription>Click the chart to jump. Colored lines mark your mistakes.</CardDescription>
             </CardHeader>
             <CardContent>
-              <EvalChart a={a} pos={pos} onSeek={seek} />
+              <div className="flex flex-col gap-2">
+                <EvalChart a={a} pos={pos} onSeek={seek} />
+                {a.moves.some((x) => x.timeSpent !== undefined) && (
+                  <>
+                    <span className="text-muted-foreground text-xs">Time you spent per move</span>
+                    <TimeStrip a={a} pos={pos} onSeek={seek} />
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -259,6 +267,11 @@ function Explain({
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm leading-relaxed">
         {body}
+        {m.timeSpent !== undefined && m.clockBefore !== undefined && (
+          <p className="text-muted-foreground text-xs tabular-nums">
+            {mine ? "You" : "They"} took {formatSeconds(m.timeSpent)} · {formatSeconds(m.clockBefore)} was left on the clock
+          </p>
+        )}
         {isError(m) && mine && m.bestLine.length > 0 ? (
           <div className="bg-muted/60 flex flex-col gap-2 rounded-lg px-3 py-2">
             <div className="text-muted-foreground text-xs">Best line · click a move to jump there</div>

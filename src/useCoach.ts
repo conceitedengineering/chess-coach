@@ -91,7 +91,7 @@ export function useCoach() {
   }, []);
 
   const evaluate = useCallback((fen: string) => {
-    if (!pool.current) throw new Error("Engine not ready");
+    if (!pool.current) pool.current = new EnginePool(); // e.g. reviewing before any day is analyzed
     return pool.current.evaluate(fen, depth, true);
   }, [depth]);
 

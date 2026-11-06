@@ -34,6 +34,9 @@ export interface MoveInfo {
   tags: string[];
   phase: Phase;
   accuracy: number;
+  /** Seconds the mover spent on this move and had left before it (when the game has clock data). */
+  timeSpent?: number;
+  clockBefore?: number;
 }
 
 export interface GameAnalysis {
@@ -193,14 +196,34 @@ function uciToSanLine(fen: string, pv: string[], max = 8): string[] {
 }
 
 function moveFacts(fen: string, uci: string | null) {
-  if (!uci) return { capture: false, check: false };
+  const none = { capture: false, check: false, captured: undefined as string | undefined };
+  if (!uci) return none;
   try {
     const m = new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-    return { capture: !!m.captured, check: m.san.includes("+") || m.san.includes("#") };
+    return { capture: !!m.captured, check: m.san.includes("+") || m.san.includes("#"), captured: m.captured as string | undefined };
   } catch {
-    return { capture: false, check: false };
+    return none;
   }
 }
+
+/**
+ * Was this capture already on the board before the player moved? We hand the opponent the move
+ * (a "null move") in the earlier position and see if the same capture of the same piece was legal.
+ * If yes, the player ignored an existing threat; if no, their move created the problem.
+ */
+function threatExistedBefore(fenBefore: string, reply: string, capturedAfter: string | undefined) {
+  const parts = fenBefore.split(" ");
+  parts[1] = parts[1] === "w" ? "b" : "w";
+  parts[3] = "-";
+  try {
+    const m = new Chess(parts.join(" ")).move({ from: reply.slice(0, 2), to: reply.slice(2, 4), promotion: reply[4] });
+    return !!m.captured && m.captured === capturedAfter;
+  } catch {
+    return false; // illegal there (or the null-move position is invalid, e.g. the player was in check)
+  }
+}
+
+const PIECE_VALUE: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
 export function classify(
   game: GameRecord,
@@ -234,14 +257,39 @@ export function classify(
       tags.push(`Allowed mate in ${-mateAfter}`);
     }
     if (wpBefore >= 80 && wpAfter < 60) tags.push("Threw away a winning position");
-    if (drop >= THRESHOLDS.mistake && moveFacts(fens[i + 1], after.best).capture) tags.push("Left material hanging");
+
+    // Why it went wrong: what did the opponent's best reply punish?
+    if (drop >= THRESHOLDS.mistake && after.best) {
+      const reply = moveFacts(fens[i + 1], after.best);
+      if (reply.capture) {
+        tags.push(threatExistedBefore(fens[i], after.best, reply.captured) ? "Ignored a threat" : "Left material hanging");
+      } else if (reply.check) {
+        tags.push("Missed their check");
+      }
+    }
 
     const prev = out[i - 1];
     const isMiss = missedMate || (!!prev && prev.drop >= MISS_OPP_ERROR && drop >= MISS_GIVEBACK);
     if (isMiss) {
       const f = moveFacts(fens[i], before.best);
-      if (f.capture || f.check) tags.push("Missed tactic");
+      if (f.capture && PIECE_VALUE[f.captured ?? "p"] >= 3) tags.push("Missed free material");
+      else if (f.capture || f.check) tags.push("Missed tactic");
       if (classification === "best" || classification === "good") classification = "inaccuracy";
+    }
+
+    // Clock: how long this move took and how much time was left.
+    let timeSpent: number | undefined;
+    let clockBefore: number | undefined;
+    const clocks = game.clocks;
+    const tc = game.timeControl;
+    if (clocks && tc) {
+      clockBefore = i >= 2 ? clocks[i - 2] : tc.base;
+      timeSpent = Math.max(0, clockBefore - clocks[i] + tc.inc);
+      if (drop >= THRESHOLDS.mistake) {
+        if (clockBefore < tc.base * 0.1) tags.push("Time trouble");
+        else if (timeSpent < 3) tags.push("Moved too fast");
+        else if (timeSpent >= Math.max(15, tc.base * 0.1)) tags.push("Long think, then mistake");
+      }
     }
 
     const fullMove = Number(fens[i].split(" ")[5]);
@@ -264,6 +312,8 @@ export function classify(
       tags,
       phase: phaseOf(fens[i], i),
       accuracy: moveAccuracy(drop),
+      timeSpent,
+      clockBefore,
     });
   }
 

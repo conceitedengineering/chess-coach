@@ -16,7 +16,7 @@ export const isError = (m: MoveInfo) =>
   m.isMiss || m.classification === "blunder" || m.classification === "mistake" || m.classification === "inaccuracy";
 
 export type Severity = "best" | "good" | "inaccuracy" | "mistake" | "blunder" | "miss";
-export const severity = (m: MoveInfo): Severity => (m.isMiss ? "miss" : m.classification);
+export const severity = (m: Pick<MoveInfo, "isMiss" | "classification">): Severity => (m.isMiss ? "miss" : m.classification);
 
 const LABEL: Record<MoveInfo["classification"], string> = {
   best: "Best",
@@ -45,7 +45,7 @@ export const SEVERITY_TEXT: Record<Severity, string> = {
   miss: "text-miss",
 };
 
-export function MoveBadge({ m, className }: { m: MoveInfo; className?: string }) {
+export function MoveBadge({ m, className }: { m: Pick<MoveInfo, "isMiss" | "classification">; className?: string }) {
   const label = m.isMiss ? `Miss · ${LABEL[m.classification]}` : LABEL[m.classification];
   return <Badge className={cn(SEVERITY_TINT[severity(m)], "font-semibold", className)}>{label}</Badge>;
 }

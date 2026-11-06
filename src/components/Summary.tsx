@@ -1,4 +1,4 @@
-import { ChevronRight, Lightbulb, Target } from "lucide-react";
+import { ChevronRight, Lightbulb, Repeat, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,12 @@ const TIPS: Record<string, string> = {
   "Threw away a winning position": "When ahead, simplify: trade pieces and shut down counterplay.",
   "Allowed mate": "After your move, list your opponent's checks. King safety first.",
   "Missed mate": "Look for forcing checks first. You had a mate on the board.",
+  "Ignored a threat": "After every opponent move, ask: what does it attack? Answer that before your own plan.",
+  "Missed their check": "Before you move, list every check your opponent would have next.",
+  "Missed free material": "When a piece is offered, check whether it's really free, then take it.",
+  "Moved too fast": "Slow down on captures and checks: take three seconds for a blunder check.",
+  "Time trouble": "Spend less time early; keep at least a third of your clock for the middlegame.",
+  "Long think, then mistake": "If you're thinking long, pick two candidate moves and compare them, then commit.",
 };
 
 export function allMoments(slots: Slot[]): { a: GameAnalysis; m: MoveInfo }[] {
@@ -36,10 +42,14 @@ export function Summary({
   slots,
   onOpenGame,
   onDrill,
+  bank,
+  onReview,
 }: {
   slots: Slot[];
   onOpenGame: (i: number) => void;
   onDrill: () => void;
+  bank: { size: number; due: number; recentTags: [string, number][] };
+  onReview: () => void;
 }) {
   const analyses = slots.flatMap((s) => (s.analysis ? [s.analysis] : []));
   const games = slots.map((s) => s.game);
@@ -60,7 +70,9 @@ export function Summary({
   }
   const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
   const maxPhase = Math.max(1, ...Object.values(phases));
-  const topTip = tags.find(([t]) => TIPS[t]);
+  // The tip follows your most common mistake over the last two weeks, falling back to today.
+  const topTip = bank.recentTags.find(([t]) => TIPS[t]) ?? tags.find(([t]) => TIPS[t]);
+  const recurring = bank.recentTags.filter(([, n]) => n >= 3).slice(0, 3);
   const pending = slots.length - analyses.length;
 
   return (
@@ -113,6 +125,17 @@ export function Summary({
               ) : (
                 <p className="text-muted-foreground text-sm">No recurring patterns.</p>
               )}
+              {recurring.length > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  Last 14 days:{" "}
+                  {recurring.map(([t, n], i) => (
+                    <span key={t}>
+                      {i > 0 && " · "}
+                      <span className="text-foreground">{t}</span> ×{n}
+                    </span>
+                  ))}
+                </p>
+              )}
               {topTip && (
                 <div className="bg-muted/60 flex gap-2 rounded-lg p-3 text-sm">
                   <Lightbulb className="text-inaccuracy mt-0.5 size-4 shrink-0" />
@@ -131,13 +154,19 @@ export function Summary({
                   : "No critical positions to drill. Clean day."}
               </CardDescription>
             </CardHeader>
-            {moments.length > 0 && (
-              <CardContent className="mt-auto">
+            <CardContent className="mt-auto flex flex-col gap-2">
+              {moments.length > 0 && (
                 <Button onClick={onDrill} className="w-full">
                   <Target /> Start drill
                 </Button>
-              </CardContent>
-            )}
+              )}
+              <Button variant="outline" onClick={onReview} disabled={bank.due === 0} className="w-full">
+                <Repeat /> {bank.due ? `Review ${bank.due} due` : "Nothing due for review"}
+              </Button>
+              <p className="text-muted-foreground text-center text-xs">
+                {plural(bank.size, "position")} saved · they come back after 1, 3, 7, 21 and 60 days
+              </p>
+            </CardContent>
           </Card>
         </div>
       )}

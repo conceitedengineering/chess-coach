@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -8,18 +8,31 @@ import { GameReview } from "@/components/GameReview";
 import { LoadForm } from "@/components/LoadForm";
 import { allMoments, Summary } from "@/components/Summary";
 import { keyMoments } from "@/analysis";
+import { recentTagCounts, toBankItem, useBank, type BankItem } from "@/bank";
 import { ThemeToggle } from "@/theme";
 import { useCoach } from "@/useCoach";
 
 type View =
   | { kind: "summary" }
   | { kind: "game"; index: number; pos: number }
-  | { kind: "drill"; index: number };
+  | { kind: "drill"; title: string; items: BankItem[]; index: number };
 
 export function App() {
   const { slots, status, run, evaluate } = useCoach();
   const [view, setView] = useState<View>({ kind: "summary" });
   const busy = status.kind === "fetching" || status.kind === "analyzing";
+  const bank = useBank();
+
+  // Every analyzed game feeds its mistakes into the bank (once per game).
+  const banked = useRef(new Set<string>());
+  useEffect(() => {
+    for (const s of slots) {
+      if (s.analysis && !banked.current.has(s.game.id)) {
+        banked.current.add(s.game.id);
+        bank.addGame(s.analysis);
+      }
+    }
+  }, [slots, bank.addGame]);
 
   const goto = (v: View) => {
     setView(v);
@@ -33,7 +46,14 @@ export function App() {
   };
 
   const seek = useCallback((pos: number) => setView((v) => (v.kind === "game" ? { ...v, pos } : v)), []);
-  const moments = allMoments(slots);
+  const startDayDrill = () =>
+    goto({ kind: "drill", title: "Drill", index: 0, items: allMoments(slots).map(({ a, m }) => toBankItem(a, m)) });
+  const startReview = () => goto({ kind: "drill", title: "Review", index: 0, items: bank.due });
+  const openBankGame = (it: BankItem) => {
+    const index = slots.findIndex((s) => s.game.id === it.gameId && s.analysis);
+    if (index >= 0) goto({ kind: "game", index, pos: it.ply + 1 });
+    else window.open(it.gameUrl, "_blank", "noopener,noreferrer");
+  };
   const game = view.kind === "game" ? slots[view.index]?.analysis : undefined;
 
   return (
@@ -79,21 +99,30 @@ export function App() {
           </Alert>
         )}
 
-        {slots.length === 0 && status.kind !== "fetching" ? (
+        {view.kind === "drill" && view.items.length ? (
+          <Drill
+            items={view.items}
+            title={view.title}
+            index={Math.min(view.index, view.items.length - 1)}
+            onIndex={(index) => setView({ ...view, index })}
+            onBack={() => goto({ kind: "summary" })}
+            onOpenGame={openBankGame}
+            onResult={bank.record}
+            scheduleOf={(key) => bank.items[key]}
+            evaluate={evaluate}
+          />
+        ) : slots.length === 0 && status.kind !== "fetching" ? (
           <EmptyState loading={status.kind === "idle"} />
         ) : view.kind === "game" && game ? (
           <GameReview a={game} pos={view.pos} onSeek={seek} onBack={() => goto({ kind: "summary" })} />
-        ) : view.kind === "drill" && moments.length ? (
-          <Drill
-            moments={moments}
-            index={Math.min(view.index, moments.length - 1)}
-            onIndex={(index) => setView({ kind: "drill", index })}
-            onBack={() => goto({ kind: "summary" })}
-            onOpenGame={(a, m) => goto({ kind: "game", index: slots.findIndex((s) => s.analysis === a), pos: m.ply + 1 })}
-            evaluate={evaluate}
-          />
         ) : (
-          <Summary slots={slots} onOpenGame={openGame} onDrill={() => goto({ kind: "drill", index: 0 })} />
+          <Summary
+            slots={slots}
+            onOpenGame={openGame}
+            onDrill={startDayDrill}
+            bank={{ size: bank.list.length, due: bank.due.length, recentTags: recentTagCounts(bank.list) }}
+            onReview={startReview}
+          />
         )}
       </main>
     </div>

@@ -48,6 +48,10 @@ export interface GameRecord {
   startFen?: string;
   sanMoves: string[];
   opening?: string;
+  /** Seconds left on the mover's clock after each ply (same length as sanMoves), when the site records it. */
+  clocks?: number[];
+  /** Starting time and increment in seconds (live games only). */
+  timeControl?: { base: number; inc: number };
 }
 
 export function dayRange(dateStr: string): { start: number; end: number } {
@@ -74,7 +78,7 @@ async function fetchLichess(username: string, start: number, end: number): Promi
     until: String(end),
     moves: "true",
     opening: "true",
-    clocks: "false",
+    clocks: "true",
     evals: "false",
   });
   const res = await fetch(`https://lichess.org/api/games/user/${encodeURIComponent(username)}?${params}`, {
@@ -110,6 +114,10 @@ async function fetchLichess(username: string, start: number, end: number): Promi
       startFen: g.initialFen,
       sanMoves: String(g.moves).split(" ").filter(Boolean),
       opening: g.opening?.name,
+      clocks: Array.isArray(g.clocks) && g.clocks.length === String(g.moves).split(" ").filter(Boolean).length
+        ? g.clocks.map((cs: number) => cs / 100)
+        : undefined,
+      timeControl: g.clock ? { base: g.clock.initial, inc: g.clock.increment } : undefined,
     });
   }
   return out;
@@ -154,6 +162,8 @@ async function fetchChessCom(username: string, start: number, end: number): Prom
         startFen: parsed.startFen,
         sanMoves: parsed.san,
         opening: parsed.opening,
+        clocks: parsed.clocks,
+        timeControl: parseTimeControl(g.time_control),
       });
     }
   }
@@ -203,7 +213,21 @@ export async function fetchRecentChessComDays(username: string): Promise<{ date:
   return [...counts.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-function parsePgn(pgn: string): { san: string[]; startFen?: string; opening?: string } | null {
+/** "180" or "180+2" → seconds; daily games ("1/86400") have no clock worth analyzing. */
+function parseTimeControl(tc: unknown): { base: number; inc: number } | undefined {
+  const m = /^(\d+)(?:\+(\d+))?$/.exec(String(tc ?? ""));
+  return m ? { base: Number(m[1]), inc: Number(m[2] ?? 0) } : undefined;
+}
+
+/** Chess.com writes the mover's remaining clock after every move as {[%clk 0:02:58.1]}. */
+function parseClocks(pgn: string, moves: number): number[] | undefined {
+  const clocks = [...pgn.matchAll(/\[%clk (\d+):(\d+):(\d+(?:\.\d+)?)\]/g)].map(
+    ([, h, m, sec]) => Number(h) * 3600 + Number(m) * 60 + Number(sec),
+  );
+  return clocks.length === moves ? clocks : undefined;
+}
+
+function parsePgn(pgn: string): { san: string[]; startFen?: string; opening?: string; clocks?: number[] } | null {
   try {
     const chess = new Chess();
     chess.loadPgn(pgn);
@@ -215,7 +239,13 @@ function parsePgn(pgn: string): { san: string[]; startFen?: string; opening?: st
           .replace(/\s*(\.{3})?\s*\d+\..*$/, "") // drop trailing move sequence like "...3.e3 d5"
           .trim()
       : undefined;
-    return { san: chess.history(), startFen: headers["SetUp"] === "1" ? headers["FEN"] : undefined, opening };
+    const san = chess.history();
+    return {
+      san,
+      startFen: headers["SetUp"] === "1" ? headers["FEN"] : undefined,
+      opening,
+      clocks: parseClocks(pgn, san.length),
+    };
   } catch {
     return null;
   }
