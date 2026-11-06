@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2, PlayCircle, XCircle } from "lucide-react";
 import { Chess } from "chess.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ChessBoard, type BoardArrow } from "@/components/ChessBoard";
+import { LinePanel, lineBoard, makeLine, useLineViewer } from "@/components/LinePlayer";
 import { THRESHOLDS, winPct, type GameAnalysis, type MoveInfo } from "@/analysis";
 import type { EngineEval } from "@/engine";
 import { MoveBadge, opponent, pct, SanText, sideName } from "@/lib/chess-ui";
@@ -20,6 +21,7 @@ interface Attempt {
   san: string;
   fenAfter: string;
   wp: number | null; // your winning chances after this move, once the engine has checked it
+  pv: string[]; // the engine's continuation after this move
 }
 
 export function Drill({
@@ -89,6 +91,7 @@ function Puzzle({
   const [phase, setPhase] = useState<Phase>("solving");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [solvedFen, setSolvedFen] = useState<{ fen: string; uci: string } | null>(null);
+  const viewer = useLineViewer();
   const timer = useRef<number>(0);
   const alive = useRef(true);
   useEffect(() => {
@@ -116,7 +119,7 @@ function Puzzle({
       }
 
       // Wrong: leave the move on the board in red, then slide it back so you can try again.
-      const attempt: Attempt = { uci, san: move.san, fenAfter, wp: null };
+      const attempt: Attempt = { uci, san: move.san, fenAfter, wp: null, pv: [] };
       setAttempts((list) => [...list, attempt]);
       setPhase("showing-wrong");
       window.clearTimeout(timer.current);
@@ -127,12 +130,39 @@ function Puzzle({
         .then((e) => {
           if (!alive.current) return;
           const wp = 100 - winPct({ cp: e.cp, mate: e.mate, best: null, pv: [] });
-          setAttempts((list) => list.map((x) => (x === attempt ? { ...x, wp } : x)));
+          setAttempts((list) => list.map((x) => (x === attempt ? { ...x, wp, pv: e.pv } : x)));
         })
         .catch(() => {});
     },
     [m, evaluate, onSolved],
   );
+
+  // Lines you can play out on the board.
+  const moveNo = m.moveLabel.replace(/[.…]$/, "");
+  const bestLine = () =>
+    makeLine(
+      `Best line from move ${moveNo}`,
+      "best",
+      m.fenBefore,
+      a.evals[m.ply].pv,
+      `With best play you keep about ${pct(m.wpBefore)} winning chances.`,
+    );
+  const attemptLine = (t: Attempt) =>
+    makeLine(
+      `What happens after ${t.san}`,
+      "played",
+      m.fenBefore,
+      [t.uci, ...t.pv],
+      t.wp !== null ? `The engine's best replies leave you about ${pct(t.wp)} winning chances (best play keeps ${pct(m.wpBefore)}).` : undefined,
+    );
+  const gameLine = () =>
+    makeLine(
+      `What happened after ${m.san} in the game`,
+      "played",
+      m.fenBefore,
+      [m.uci, ...a.evals[m.ply + 1].pv],
+      `After ${m.san}, best play from both sides leaves you about ${pct(m.wpAfter)} winning chances.`,
+    );
 
   // What the board shows in each phase.
   const board = useMemo(() => {
@@ -161,18 +191,33 @@ function Puzzle({
     }
   }, [phase, last, solvedFen, m, prev]);
 
+  const lineView = viewer.line ? lineBoard(viewer.line, viewer.step) : null;
+
   return (
     <>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,540px)_minmax(0,1fr)]">
-        <ChessBoard
-          fen={board.fen}
-          orientation={m.color}
-          lastMove={board.lastMove}
-          arrows={board.arrows}
-          squareClasses={board.squareClasses}
-          onMove={phase === "solving" ? onMove : undefined}
-        />
+        {lineView ? (
+          <ChessBoard fen={lineView.fen} orientation={m.color} lastMove={lineView.lastMove} arrows={lineView.arrows} />
+        ) : (
+          <ChessBoard
+            fen={board.fen}
+            orientation={m.color}
+            lastMove={board.lastMove}
+            arrows={board.arrows}
+            squareClasses={board.squareClasses}
+            onMove={phase === "solving" ? onMove : undefined}
+          />
+        )}
 
+        {viewer.line ? (
+          <LinePanel
+            line={viewer.line}
+            step={viewer.step}
+            setStep={viewer.setStep}
+            onExit={viewer.close}
+            exitLabel={done ? "Back to drill" : "Back to puzzle"}
+          />
+        ) : (
         <Card>
           <CardHeader>
             <CardDescription>
@@ -218,9 +263,18 @@ function Puzzle({
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-muted-foreground text-xs">Tried</span>
                 {attempts.map((t, i) => (
-                  <Badge key={i} className="bg-blunder/15 text-blunder font-mono">
-                    {t.san}
-                    {t.wp !== null && <span className="font-sans opacity-75">{pct(t.wp)}</span>}
+                  <Badge key={i} asChild className="bg-blunder/15 text-blunder hover:bg-blunder/25 font-mono">
+                    <button
+                      type="button"
+                      disabled={t.wp === null}
+                      onClick={() => viewer.open(attemptLine(t), 1)}
+                      title={`Play out what happens after ${t.san}`}
+                      className="cursor-pointer disabled:cursor-wait"
+                    >
+                      {t.san}
+                      {t.wp !== null && <span className="font-sans opacity-75">{pct(t.wp)}</span>}
+                      {t.wp !== null && <PlayCircle />}
+                    </button>
                   </Badge>
                 ))}
               </div>
@@ -233,9 +287,28 @@ function Puzzle({
                   <span className="text-muted-foreground tabular-nums">{pct(m.wpBefore)} → {pct(m.wpAfter)}</span>
                 </p>
                 {m.bestLine.length > 0 && (
-                  <div className="bg-muted/60 rounded-lg px-3 py-2">
-                    <div className="text-muted-foreground mb-0.5 text-xs">Best line</div>
-                    <SanText>{m.bestLine.join(" ")}</SanText>
+                  <div className="bg-muted/60 flex flex-col gap-2 rounded-lg px-3 py-2">
+                    <div className="text-muted-foreground text-xs">Best line · click a move to jump there</div>
+                    <div className="flex flex-wrap gap-0.5">
+                      {m.bestLine.map((san, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => viewer.open(bestLine(), i + 1)}
+                          className="hover:bg-background rounded px-1 font-mono text-sm"
+                        >
+                          {san}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => viewer.open(bestLine(), 0)}>
+                        <PlayCircle /> Play out best line
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => viewer.open(gameLine(), 0)}>
+                        What happened after {m.san}
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {m.tags.length > 0 && (
@@ -263,6 +336,7 @@ function Puzzle({
             </Button>
           </CardFooter>
         </Card>
+        )}
       </div>
     </>
   );

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
-import { ArrowLeft, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, ExternalLink, PlayCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChessBoard, type BoardArrow } from "@/components/ChessBoard";
 import { EvalChart } from "@/components/EvalChart";
-import { formatEval, keyMoments, THRESHOLDS, type GameAnalysis, type MoveInfo } from "@/analysis";
+import { LinePanel, lineBoard, makeLine, useLineViewer, type Line } from "@/components/LinePlayer";
+import { formatEval, keyMoments, THRESHOLDS, winPct, type GameAnalysis, type MoveInfo } from "@/analysis";
 import {
   isError, MoveBadge, opponent, pct, platformName, ResultBadge, SanText, SEVERITY_TEXT, severity, sideName,
 } from "@/lib/chess-ui";
@@ -28,9 +29,12 @@ export function GameReview({
   const m = pos > 0 ? a.moves[pos - 1] : null;
   const moments = keyMoments(a);
   const opp = opponent(g);
+  const viewer = useLineViewer();
+  const lineOpen = viewer.line !== null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (lineOpen) return; // the line player owns the arrow keys while it's open
       if (e.target instanceof Element && e.target.matches("input, select, textarea, [role=combobox]")) return;
       const next: Record<string, number> = { ArrowLeft: pos - 1, ArrowRight: pos + 1, Home: 0, End: n };
       if (e.key in next) {
@@ -40,7 +44,7 @@ export function GameReview({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pos, n, onSeek]);
+  }, [pos, n, onSeek, lineOpen]);
 
   const arrows = useMemo<BoardArrow[]>(() => {
     if (!m || !isError(m)) return [];
@@ -50,7 +54,12 @@ export function GameReview({
     return out;
   }, [m, g.userColor]);
 
-  const seek = (p: number) => onSeek(Math.max(0, Math.min(n, p)));
+  // Moving around the game leaves any line you were playing out.
+  const seek = (p: number) => {
+    viewer.close();
+    onSeek(Math.max(0, Math.min(n, p)));
+  };
+  const lineView = viewer.line ? lineBoard(viewer.line, viewer.step) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,8 +82,12 @@ export function GameReview({
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,540px)_minmax(0,1fr)]">
         <div className="flex flex-col gap-3 lg:sticky lg:top-6">
-          <ChessBoard fen={a.fens[pos]} orientation={g.userColor} lastMove={m?.uci} arrows={arrows} />
-          <div className="flex items-center justify-center gap-1">
+          {lineView ? (
+            <ChessBoard fen={lineView.fen} orientation={g.userColor} lastMove={lineView.lastMove} arrows={lineView.arrows} />
+          ) : (
+            <ChessBoard fen={a.fens[pos]} orientation={g.userColor} lastMove={m?.uci} arrows={arrows} />
+          )}
+          <div className={cn("flex items-center justify-center gap-1", lineView && "invisible")}>
             <Button variant="outline" size="icon" onClick={() => seek(0)} aria-label="First move"><ChevronFirst /></Button>
             <Button variant="outline" size="icon" onClick={() => seek(pos - 1)} aria-label="Previous move"><ChevronLeft /></Button>
             <span className="w-20 text-center font-mono text-sm font-semibold tabular-nums">{formatEval(a.evals[pos])}</span>
@@ -84,7 +97,17 @@ export function GameReview({
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <Explain a={a} m={m} />
+          {viewer.line ? (
+            <LinePanel
+              line={viewer.line}
+              step={viewer.step}
+              setStep={viewer.setStep}
+              onExit={viewer.close}
+              exitLabel="Back to game"
+            />
+          ) : (
+            <Explain a={a} m={m} onPlayLine={viewer.open} />
+          )}
 
           <Card size="sm">
             <CardHeader>
@@ -144,7 +167,15 @@ export function GameReview({
   );
 }
 
-function Explain({ a, m }: { a: GameAnalysis; m: MoveInfo | null }) {
+function Explain({
+  a,
+  m,
+  onPlayLine,
+}: {
+  a: GameAnalysis;
+  m: MoveInfo | null;
+  onPlayLine: (line: Line, at?: number) => void;
+}) {
   if (!m) {
     return (
       <Card>
@@ -158,6 +189,32 @@ function Explain({ a, m }: { a: GameAnalysis; m: MoveInfo | null }) {
   const mine = m.color === a.game.userColor;
   const prev = a.moves[m.ply - 1];
   const next = a.moves[m.ply + 1];
+  const yours = (wp: number) => (a.game.userColor === "w" ? wp : 100 - wp);
+
+  const bestLine = () =>
+    makeLine(
+      `Best line instead of ${m.san}`,
+      "best",
+      m.fenBefore,
+      a.evals[m.ply].pv,
+      `With best play you keep about ${pct(m.wpBefore)} winning chances.`,
+    );
+  const playedLine = () =>
+    makeLine(
+      `What ${m.san} leads to`,
+      "played",
+      m.fenBefore,
+      [m.uci, ...a.evals[m.ply + 1].pv],
+      `After ${m.san}, best play from both sides leaves you about ${pct(m.wpAfter)} winning chances.`,
+    );
+  const lineFromHere = () =>
+    makeLine(
+      `Engine line after ${m.moveLabel} ${m.san}`,
+      "best",
+      m.fenAfter,
+      a.evals[m.ply + 1].pv,
+      `Your winning chances here: about ${pct(yours(winPct(a.evals[m.ply + 1])))}.`,
+    );
 
   let body: React.ReactNode;
   if (!isError(m)) {
@@ -202,11 +259,36 @@ function Explain({ a, m }: { a: GameAnalysis; m: MoveInfo | null }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm leading-relaxed">
         {body}
-        {isError(m) && mine && m.bestLine.length > 0 && (
-          <div className="bg-muted/60 rounded-lg px-3 py-2">
-            <div className="text-muted-foreground mb-0.5 text-xs">Best line</div>
-            <SanText>{m.bestLine.join(" ")}</SanText>
+        {isError(m) && mine && m.bestLine.length > 0 ? (
+          <div className="bg-muted/60 flex flex-col gap-2 rounded-lg px-3 py-2">
+            <div className="text-muted-foreground text-xs">Best line · click a move to jump there</div>
+            <div className="flex flex-wrap gap-0.5">
+              {m.bestLine.map((san, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => onPlayLine(bestLine(), i + 1)}
+                  className="hover:bg-background rounded px-1 font-mono text-sm"
+                >
+                  {san}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => onPlayLine(bestLine())}>
+                <PlayCircle /> Play out best line
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onPlayLine(playedLine())}>
+                What {m.san} leads to
+              </Button>
+            </div>
           </div>
+        ) : (
+          a.evals[m.ply + 1].pv.length > 0 && (
+            <Button size="sm" variant="outline" className="self-start" onClick={() => onPlayLine(lineFromHere())}>
+              <PlayCircle /> Play out engine line from here
+            </Button>
+          )
         )}
         {mine && m.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
