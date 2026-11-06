@@ -1,0 +1,29 @@
+/* Chessground theme: cburnett pieces on a cool slate board that sits well on shadcn neutrals. */
+@import "@lichess-org/chessground/assets/chessground.base.css";
+@import "@lichess-org/chessground/assets/chessground.cburnett.css";
+
+cg-board {
+  background: repeating-conic-gradient(var(--sq-dark) 0 25%, var(--sq-light) 0 50%) 0 0 / 25% 25%;
+  border-radius: calc(var(--radius) * 0.8);
+}
+cg-board square.last-move { background-color: oklch(0.85 0.15 95 / 0.42); }
+cg-board square.selected { background-color: oklch(0.6 0.13 155 / 0.5); }
+cg-board square.move-dest {
+  background: radial-gradient(oklch(0.35 0.08 155 / 0.45) 22%, transparent 0);
+}
+cg-board square.oc.move-dest {
+  background: radial-gradient(transparent 0%, transparent 79%, oklch(0.35 0.08 155 / 0.4) 80%);
+}
+cg-board square.move-dest:hover { background: oklch(0.6 0.13 155 / 0.3); }
+cg-board square.check {
+  background: radial-gradient(ellipse at center, oklch(0.63 0.24 27) 0%, oklch(0.63 0.24 27 / 0) 85%);
+}
+.cg-wrap coords { font-family: var(--font-sans); font-weight: 600; font-size: 10px; }
+.orientation-white .ranks :nth-child(odd),
+.orientation-white .files :nth-child(even),
+.orientation-black .ranks :nth-child(even),
+.orientation-black .files :nth-child(odd) { color: var(--sq-light); }
+.orientation-white .ranks :nth-child(even),
+.orientation-white .files :nth-child(odd),
+.orientation-black .ranks :nth-child(odd),
+.orientation-black .files :nth-child(even) { color: var(--sq-dark); }
