@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { keyMoments, type Classification, type GameAnalysis, type MoveInfo, type Phase } from "@/analysis";
 import { opponent } from "@/lib/chess-ui";
+import { onStoreChange, readStore, writeStore } from "@/store";
 import type { Color, Platform } from "@/games";
 
 export interface BankItem {
@@ -38,12 +39,12 @@ export interface BankItem {
   lapses: number;
   addedAt: number;
   lastReviewed?: number;
+  updatedAt?: number; // last change of any kind (used to merge devices)
 }
 
 /** Days until the next review after a clean solve, by box. Box 0 = new (due now). */
 export const INTERVAL_DAYS = [0, 1, 3, 7, 21, 60];
 const DAY = 86_400_000;
-const KEY = "chess-coach:bank:v1";
 
 export const positionKey = (fen: string) => fen.split(" ").slice(0, 4).join(" ");
 
@@ -83,42 +84,42 @@ export function toBankItem(a: GameAnalysis, m: MoveInfo): BankItem {
   };
 }
 
-function load(): Record<string, BankItem> {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
-function save(items: Record<string, BankItem>) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(items));
-  } catch {
-    /* storage full or blocked: the bank just won't persist */
-  }
-}
+const load = () => readStore<BankItem>("bank");
 
 export function useBank() {
   const [items, setItems] = useState<Record<string, BankItem>>(load);
-  useEffect(() => save(items), [items]);
+
+  // Another device's changes arrived through sync (or a backup was imported): reload.
+  useEffect(() => onStoreChange((name, source) => {
+    if (name === "bank" && source === "sync") setItems(load());
+  }), []);
+
+  const commit = (next: Record<string, BankItem>) => {
+    writeStore("bank", next);
+    return next;
+  };
 
   /** Adds a game's mistakes. Erring again in a known position sends it back to the start. */
   const addGame = useCallback((a: GameAnalysis) => {
     setItems((prev) => {
       const next = { ...prev };
+      let changed = false;
+      const now = Date.now();
       for (const m of keyMoments(a)) {
         const fresh = toBankItem(a, m);
         const old = next[fresh.key];
         if (!old) {
-          next[fresh.key] = { ...fresh, due: Date.now() };
+          next[fresh.key] = { ...fresh, due: now, updatedAt: now };
+          changed = true;
         } else if (!old.gameIds.includes(a.game.id)) {
           // Same position, same kind of mistake, new game: it's a habit. Reset its schedule.
-          next[fresh.key] = { ...fresh, gameIds: [...old.gameIds, a.game.id], box: 0, due: Date.now(),
-            reviews: old.reviews, lapses: old.lapses + 1, addedAt: old.addedAt, lastReviewed: old.lastReviewed };
+          next[fresh.key] = { ...fresh, gameIds: [...old.gameIds, a.game.id], box: 0, due: now,
+            reviews: old.reviews, lapses: old.lapses + 1, addedAt: old.addedAt, lastReviewed: old.lastReviewed,
+            updatedAt: now };
+          changed = true;
         }
       }
-      return next;
+      return changed ? commit(next) : prev;
     });
   }, []);
 
@@ -129,7 +130,7 @@ export function useBank() {
       if (!it) return prev;
       const now = Date.now();
       const box = firstTry ? Math.min(it.box + 1, INTERVAL_DAYS.length - 1) : 1;
-      return {
+      return commit({
         ...prev,
         [key]: {
           ...it,
@@ -138,8 +139,9 @@ export function useBank() {
           reviews: it.reviews + 1,
           lapses: it.lapses + (firstTry ? 0 : 1),
           lastReviewed: now,
+          updatedAt: now,
         },
-      };
+      });
     });
   }, []);
 

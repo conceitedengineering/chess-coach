@@ -19,37 +19,36 @@ existing cards or behind one new button, not reshape the layout.
 | Nov 2026 | **Opening names** (Lichess CC0 list), where you left known theory, Openings card, errors by opening over time |
 | Nov 2026 | **Trends**: a saved summary per analyzed day; errors per game, accuracy and games played charted over the last 30 days |
 | Nov 2026 | **Endgame verdicts** from the Lichess tablebase (≤7 pieces), e.g. "Endgame: winning → drawn" |
+| Nov 2026 | **Backup & sync**: export/import backup file (merging), and local-first sync to a private GitHub repo (bank, notes, day summaries; per-item last-write-wins, conflict retry) |
 
 ## Next up
 
-1. **Durable storage (see "Storage plan" below).** Step 1: export/import backup file. Step 2: sync to a private
-   GitHub repo.
-2. **Backfill**: analyze the last 7–30 days in the background so the bank and trends fill up even on days you
+1. **Backfill**: analyze the last 7–30 days in the background so the bank and trends fill up even on days you
    don't open the app.
 
 ## Later (medium)
 
-3. **Real tactic motifs** (fork, pin, skewer, discovered attack, back-rank, removing the defender) detected on the
+2. **Real tactic motifs** (fork, pin, skewer, discovered attack, back-rank, removing the defender) detected on the
    engine's best line → "Missed forks ×5" dashboard and drill-by-motif.
    Port rules from chess_detect (MIT, https://github.com/aslyamov/chess_detect) or reimplement lichess-puzzler's tagger
    ideas (AGPL, https://github.com/ornicar/lichess-puzzler/tree/master/tagger). ~400–600 lines TS.
-4. **Blunder-check gate / "Find the threat" drill** (Heisman): after choosing a move, name the opponent's most
+3. **Blunder-check gate / "Find the threat" drill** (Heisman): after choosing a move, name the opponent's most
    dangerous reply; or, after their move, play the threat they just created.
-5. **Convert winning positions** (Aimchess "Advantage Capitalization"): positions where you had ≥80% and didn't win,
+4. **Convert winning positions** (Aimchess "Advantage Capitalization"): positions where you had ≥80% and didn't win,
    replayed against a weakened Stockfish (`Skill Level` / `UCI_LimitStrength`).
-6. **Woodpecker / speed mode**: timed runs through the bank, each cycle at half the previous time. Only use
+5. **Woodpecker / speed mode**: timed runs through the bank, each cycle at half the previous time. Only use
    "one clear best move" positions (MultiPV 2, best ≥ ~150cp ahead of second) so reasonable alternatives aren't punished.
-7. **Lichess-style tolerance setting**: optionally accept any move within ~4% win chance of the best
+6. **Lichess-style tolerance setting**: optionally accept any move within ~4% win chance of the best
    (lila `retroCtrl.ts`). Off by default, since we decided to require the best move.
 
 ## Someday (bigger)
 
-8. **Maia, a human-like engine** (https://huggingface.co/bqrio/maia3-onnx, ~11MB fp16, onnxruntime-web):
+7. **Maia, a human-like engine** (https://huggingface.co/bqrio/maia3-onnx, ~11MB fp16, onnxruntime-web):
     "what would an 800 / 1100 / 1500 player play here", "how normal is this blunder at your rating". ~1 day.
-9. **Mixed sessions**: your mistakes plus fresh puzzles on your weakest theme, from a small bundled subset of the
+8. **Mixed sessions**: your mistakes plus fresh puzzles on your weakest theme, from a small bundled subset of the
     Lichess puzzle database (CC0).
 
-## Storage plan (researched Nov 2026)
+## Storage (researched and built Nov 2026)
 
 Today everything (mistake bank, notes, day summaries, engine cache) lives in one browser's localStorage. The app
 already asks the browser to keep it (`navigator.storage.persist()`), but clearing site data or switching devices

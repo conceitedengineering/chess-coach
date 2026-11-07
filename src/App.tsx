@@ -11,6 +11,8 @@ import { keyMoments } from "@/analysis";
 import { recentTagCounts, toBankItem, useBank, type BankItem } from "@/bank";
 import { summarizeDay, useDays } from "@/days";
 import { ThemeToggle } from "@/theme";
+import { SyncDialog } from "@/components/SyncDialog";
+import { useSync } from "@/sync";
 import { useCoach } from "@/useCoach";
 
 type View =
@@ -25,6 +27,7 @@ export function App() {
   const bank = useBank();
 
   const days = useDays();
+  const sync = useSync();
 
   // When a whole day is analyzed, save its summary for the trend charts.
   useEffect(() => {
@@ -76,7 +79,8 @@ export function App() {
           <Badge variant="outline" className="text-muted-foreground hidden sm:inline-flex">
             Stockfish 19 · runs in your browser
           </Badge>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <SyncDialog sync={sync} />
             <ThemeToggle />
           </div>
         </div>

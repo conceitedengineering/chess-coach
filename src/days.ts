@@ -1,5 +1,6 @@
 // One saved summary per analyzed day, so trends can be charted over weeks.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { onStoreChange, readStore, writeStore } from "@/store";
 import { keyMoments, type GameAnalysis } from "@/analysis";
 
 export interface OpeningStats {
@@ -28,15 +29,7 @@ export interface DaySummary {
   openings: Record<string, OpeningStats>; // by opening family
 }
 
-const KEY = "chess-coach:days:v1";
-
-function load(): Record<string, DaySummary> {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
+const load = () => readStore<DaySummary>("days");
 
 export function summarizeDay(date: string, depth: number, analyses: GameAnalysis[]): DaySummary {
   const s: DaySummary = {
@@ -74,12 +67,16 @@ export function summarizeDay(date: string, depth: number, analyses: GameAnalysis
 
 export function useDays() {
   const [days, setDays] = useState<Record<string, DaySummary>>(load);
+  useEffect(() => onStoreChange((name, source) => {
+    if (name === "days" && source === "sync") setDays(load());
+  }), []);
   const save = useCallback((d: DaySummary) => {
     setDays((prev) => {
+      const old = prev[d.date];
+      // Skip rewriting an identical summary (it would only trigger a pointless sync).
+      if (old && old.games === d.games && old.errors === d.errors && old.depth === d.depth) return prev;
       const next = { ...prev, [d.date]: d };
-      try {
-        localStorage.setItem(KEY, JSON.stringify(next));
-      } catch { /* ignore */ }
+      writeStore("days", next);
       return next;
     });
   }, []);

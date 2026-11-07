@@ -25,6 +25,10 @@ npm run dev   # http://localhost:5173
 Results are cached in localStorage per game and depth, so re-opening a day is instant. Every mistake also goes into a
 local **mistake bank** that brings positions back for review after 1, 3, 7, 21 and 60 days.
 
+**Backup & sync** (cloud button in the header): download/load a backup file, or sync the mistake bank, notes and
+day summaries to a private GitHub repo with a fine-grained token scoped to that repo (Contents: read and write).
+The token stays in the browser; data files live in `data/*.json` of the data repo.
+
 Planned features live in [ROADMAP.md](ROADMAP.md).
 
 Opening names come from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0),
