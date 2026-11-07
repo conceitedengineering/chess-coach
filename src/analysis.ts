@@ -37,6 +37,8 @@ export interface MoveInfo {
   /** Seconds the mover spent on this move and had left before it (when the game has clock data). */
   timeSpent?: number;
   clockBefore?: number;
+  /** Exact result with perfect play, from the tablebase (endgames with ≤7 pieces). */
+  tablebase?: { before: "win" | "draw" | "loss"; after: "win" | "draw" | "loss" };
 }
 
 export interface GameAnalysis {
@@ -46,6 +48,7 @@ export interface GameAnalysis {
   moves: MoveInfo[];
   accuracy: number; // user's approximate accuracy
   counts: Record<"blunder" | "mistake" | "inaccuracy" | "miss", number>;
+  opening?: import("@/openings").OpeningInfo | null;
 }
 
 // Thresholds on win-% drop, matching Lichess (0.1 / 0.2 / 0.3 on its -1..1 scale).

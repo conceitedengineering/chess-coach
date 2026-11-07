@@ -3,6 +3,8 @@ import { EnginePool } from "@/engine";
 import { fetchDayGames, type GameRecord, type Platform } from "@/games";
 import { analyseGame, positionCount, type GameAnalysis } from "@/analysis";
 import { platformName, plural } from "@/lib/chess-ui";
+import { identifyOpening } from "@/openings";
+import { addEndgameVerdicts } from "@/tablebase";
 
 export interface Slot {
   game: GameRecord;
@@ -27,6 +29,7 @@ export function useCoach() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [depth, setDepth] = useState(13);
+  const [date, setDate] = useState<string | null>(null);
   const pool = useRef<EnginePool | null>(null);
   const runId = useRef(0);
 
@@ -38,6 +41,7 @@ export function useCoach() {
     const p = new EnginePool();
     pool.current = p;
     setDepth(d);
+    setDate(date);
     setSlots([]);
     setStatus({ kind: "fetching", message: `Fetching ${date} games from ${platformName(platform)}…` });
 
@@ -78,6 +82,8 @@ export function useCoach() {
       games.map(async (game, i) => {
         try {
           const analysis = await analyseGame(game, p, d, tick);
+          analysis.opening = await identifyOpening(analysis.fens).catch(() => null);
+          await addEndgameVerdicts(analysis);
           if (id !== runId.current) return;
           finished++;
           setSlots((prev) => prev.map((s, j) => (j === i ? { ...s, analysis } : s)));
@@ -95,5 +101,5 @@ export function useCoach() {
     return pool.current.evaluate(fen, depth, true);
   }, [depth]);
 
-  return { slots, status, run, evaluate };
+  return { slots, status, run, evaluate, date, depth };
 }

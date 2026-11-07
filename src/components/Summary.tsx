@@ -8,6 +8,8 @@ import { END_REASON_ICON, opponent, pct, plural, ResultBadge, sideName } from "@
 import { END_REASON_LABEL, type EndReason, type GameRecord } from "@/games";
 import { cn } from "@/lib/utils";
 import type { Slot } from "@/useCoach";
+import { Trends } from "@/components/Trends";
+import type { DaySummary } from "@/days";
 
 const TIPS: Record<string, string> = {
   "Left material hanging": "Before each move, ask what your opponent can capture or attack next.",
@@ -44,12 +46,14 @@ export function Summary({
   onDrill,
   bank,
   onReview,
+  trendDays,
 }: {
   slots: Slot[];
   onOpenGame: (i: number) => void;
   onDrill: () => void;
   bank: { size: number; due: number; recentTags: [string, number][] };
   onReview: () => void;
+  trendDays: DaySummary[];
 }) {
   const analyses = slots.flatMap((s) => (s.analysis ? [s.analysis] : []));
   const games = slots.map((s) => s.game);
@@ -168,8 +172,12 @@ export function Summary({
               </p>
             </CardContent>
           </Card>
+
+          <OpeningsCard analyses={analyses} />
         </div>
       )}
+
+      {analyses.length > 0 && <Trends days={trendDays} />}
 
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline gap-2">
@@ -183,6 +191,48 @@ export function Summary({
         </div>
       </div>
     </div>
+  );
+}
+
+function OpeningsCard({ analyses }: { analyses: GameAnalysis[] }) {
+  const groups = new Map<string, { games: number; w: number; l: number; errors: number; book: number; leftByYou: number }>();
+  for (const a of analyses) {
+    const fam = a.opening?.family ?? "Unknown opening";
+    const gr = groups.get(fam) ?? { games: 0, w: 0, l: 0, errors: 0, book: 0, leftByYou: 0 };
+    gr.games++;
+    if (a.game.result === "win") gr.w++;
+    if (a.game.result === "loss") gr.l++;
+    gr.errors += keyMoments(a).length;
+    gr.book += a.opening?.bookPlies ?? 0;
+    if (a.opening?.leftBy === a.game.userColor) gr.leftByYou++;
+    groups.set(fam, gr);
+  }
+  const rows = [...groups.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 5);
+  return (
+    <Card className="md:col-span-2 xl:col-span-4">
+      <CardHeader>
+        <CardTitle>Openings</CardTitle>
+        <CardDescription>Named from Lichess's opening list. "Book" is how many moves stayed in known theory.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-6 gap-y-2 text-sm">
+          <span className="text-muted-foreground text-xs">Opening</span>
+          <span className="text-muted-foreground text-right text-xs">W–L</span>
+          <span className="text-muted-foreground text-right text-xs">Your errors</span>
+          <span className="text-muted-foreground text-right text-xs">Avg book · you left first</span>
+          {rows.map(([fam, r]) => (
+            <div key={fam} className="contents">
+              <span className="truncate">{fam} <span className="text-muted-foreground">×{r.games}</span></span>
+              <span className="text-right tabular-nums">{r.w}–{r.l}</span>
+              <span className="text-right tabular-nums">{r.errors}</span>
+              <span className="text-muted-foreground text-right tabular-nums">
+                {(r.book / r.games / 2).toFixed(1)} moves · {r.leftByYou}/{r.games}
+              </span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -248,7 +298,11 @@ function GameCard({ slot, onClick }: { slot: Slot; onClick: () => void }) {
               {sideName(g.userColor)} · {g.timeClass} · {time}
             </span>
           </div>
-          {g.opening && <p className="text-muted-foreground truncate text-xs">{g.opening}</p>}
+          {(a?.opening?.name ?? g.opening) && (
+            <p className="text-muted-foreground truncate text-xs">
+              {a?.opening ? `${a.opening.eco} · ${a.opening.name}` : g.opening}
+            </p>
+          )}
           {a ? (
             <div className="flex items-center gap-3 text-sm">
               <span>

@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChessBoard, type BoardArrow } from "@/components/ChessBoard";
 import { EvalChart, formatSeconds, TimeStrip } from "@/components/EvalChart";
+import { NoteBox } from "@/components/NoteBox";
+import { positionKey } from "@/bank";
+import { verdictWord } from "@/tablebase";
 import { LinePanel, lineBoard, makeLine, useLineViewer, type Line } from "@/components/LinePlayer";
 import { formatEval, keyMoments, THRESHOLDS, winPct, type GameAnalysis, type MoveInfo } from "@/analysis";
 import {
@@ -73,6 +76,19 @@ export function GameReview({
           </span>
           <ResultBadge result={g.result} reason={g.endReason} />
         </h2>
+        {a.opening && (
+          <p className="text-muted-foreground order-last w-full text-sm">
+            {a.opening.eco} · {a.opening.name}
+            {a.opening.leftBy && (
+              <>
+                {" · "}
+                <button type="button" className="hover:text-foreground underline underline-offset-2" onClick={() => seek(a.opening!.bookPlies + 1)}>
+                  {a.opening.leftBy === g.userColor ? "you" : "your opponent"} left known theory on move {Math.floor(a.opening.bookPlies / 2) + 1}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <Button variant="outline" size="sm" asChild>
           <a href={g.url} target="_blank" rel="noopener noreferrer">
             Open on {platformName(g.platform)} <ExternalLink />
@@ -308,6 +324,13 @@ function Explain({
             {m.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
           </div>
         )}
+        {m.tablebase && m.tablebase.before !== m.tablebase.after && (
+          <p className="bg-muted/60 rounded-lg px-3 py-2 text-xs">
+            <span className="font-semibold">Endgame tablebase:</span> with perfect play this was{" "}
+            {verdictWord(m.tablebase.before)} for {mine ? "you" : "them"}; after {m.san} it's {verdictWord(m.tablebase.after)}.
+          </p>
+        )}
+        {mine && isError(m) && <NoteBox posKey={positionKey(m.fenBefore)} />}
       </CardContent>
     </Card>
   );

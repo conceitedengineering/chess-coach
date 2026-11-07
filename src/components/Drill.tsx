@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from "@/components/ui/progress";
 import { ChessBoard, type BoardArrow } from "@/components/ChessBoard";
 import { LinePanel, lineBoard, makeLine, useLineViewer } from "@/components/LinePlayer";
+import { NoteBox } from "@/components/NoteBox";
 import { THRESHOLDS, winPct } from "@/analysis";
 import { nextReviewText, type BankItem } from "@/bank";
 import type { EngineEval } from "@/engine";
@@ -349,6 +350,7 @@ function Puzzle({
                     {it.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
                   </div>
                 )}
+                <NoteBox posKey={it.key} prompt="What were you thinking in the game? What will you look for next time?" />
               </div>
             )}
           </CardContent>

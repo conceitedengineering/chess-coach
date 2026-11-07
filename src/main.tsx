@@ -6,6 +6,9 @@ import { App } from "./App";
 import { ThemeProvider } from "./theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+// Ask the browser not to evict our localStorage under storage pressure (best effort, silent).
+navigator.storage?.persist?.().catch(() => {});
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>

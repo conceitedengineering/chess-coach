@@ -9,6 +9,7 @@ import { LoadForm } from "@/components/LoadForm";
 import { allMoments, Summary } from "@/components/Summary";
 import { keyMoments } from "@/analysis";
 import { recentTagCounts, toBankItem, useBank, type BankItem } from "@/bank";
+import { summarizeDay, useDays } from "@/days";
 import { ThemeToggle } from "@/theme";
 import { useCoach } from "@/useCoach";
 
@@ -18,10 +19,18 @@ type View =
   | { kind: "drill"; title: string; items: BankItem[]; index: number };
 
 export function App() {
-  const { slots, status, run, evaluate } = useCoach();
+  const { slots, status, run, evaluate, date, depth } = useCoach();
   const [view, setView] = useState<View>({ kind: "summary" });
   const busy = status.kind === "fetching" || status.kind === "analyzing";
   const bank = useBank();
+
+  const days = useDays();
+
+  // When a whole day is analyzed, save its summary for the trend charts.
+  useEffect(() => {
+    if (status.kind !== "done" || !date || !slots.length || slots.some((s) => !s.analysis)) return;
+    days.save(summarizeDay(date, depth, slots.map((s) => s.analysis!)));
+  }, [status.kind, date, depth, slots, days.save]);
 
   // Every analyzed game feeds its mistakes into the bank (once per game).
   const banked = useRef(new Set<string>());
@@ -122,6 +131,7 @@ export function App() {
             onDrill={startDayDrill}
             bank={{ size: bank.list.length, due: bank.due.length, recentTags: recentTagCounts(bank.list) }}
             onReview={startReview}
+            trendDays={days.list}
           />
         )}
       </main>

@@ -27,4 +27,8 @@ local **mistake bank** that brings positions back for review after 1, 3, 7, 21 a
 
 Planned features live in [ROADMAP.md](ROADMAP.md).
 
+Opening names come from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0),
+regenerated with `node scripts/build-openings.mjs <folder-with-tsvs>`. Endgame verdicts use the public
+[Lichess tablebase API](https://tablebase.lichess.org).
+
 Stockfish is GPLv3. If you distribute this app with the engine, publish your source too.
